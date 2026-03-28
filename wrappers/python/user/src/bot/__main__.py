@@ -2,7 +2,6 @@ from __future__ import annotations
 from dotenv import load_dotenv
 
 from hackarena3 import BotContext, DriveGear, GearShift, RaceSnapshot, run_bot
-from dotenv import load_dotenv
 
 load_dotenv()
 
