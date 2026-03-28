@@ -40,7 +40,8 @@ def get_lookahead_point(
     lookahead_m: float,
 ) -> CenterlinePoint:
     """Zwróć punkt na torze oddalony o lookahead_m od aktualnej pozycji."""
-    target_s = centerline[current_idx].s_m + lookahead_m
+    current_s = centerline[current_idx].s_m
+    target_s = current_s + lookahead_m
     lap_length = centerline[-1].s_m
 
     if target_s > lap_length:
@@ -56,6 +57,71 @@ def get_lookahead_point(
             best = point
 
     return best
+
+
+def classify_turn(
+    centerline: tuple[CenterlinePoint, ...],
+    current_idx: int,
+    lookahead_m: float,
+    tick: int,
+    sample_points: int = 5,
+) -> tuple[bool, bool | None, int | None]:
+    """Sprawdź czy za lookahead_m zaczyna się zakręt porównując tangenty kolejnych punktów.
+
+    Zwraca (is_turn, is_right, severity) gdzie:
+      is_turn    - czy w ogóle jest zakręt
+      is_right   - True = zakręt w prawo, False = w lewo, None = prosta
+      severity   - 1 łagodny, 2 średni, 3 ostry, None = prosta
+    """
+    target_s = centerline[current_idx].s_m + lookahead_m
+    lap_length = centerline[-1].s_m
+    if target_s > lap_length:
+        target_s -= lap_length
+
+    # znajdź indeks punktu startowego
+    start_idx = 0
+    best_diff = float("inf")
+    for i, point in enumerate(centerline):
+        diff = abs(point.s_m - target_s)
+        if diff < best_diff:
+            best_diff = diff
+            start_idx = i
+
+    # zbierz sample_points kolejnych punktów z zawijaniem
+    n = len(centerline)
+    indices = [(start_idx + i) % n for i in range(sample_points + 1)]
+    points = [centerline[i] for i in indices]
+
+    t_start = points[0].tangent
+    t_end = points[-1].tangent
+
+    # iloczyn wektorowy tangentów → jak bardzo i w którą stronę skręcił kierunek jazdy
+    # cross > 0 = skręt w lewo, cross < 0 = skręt w prawo
+    cross = t_start.x * t_end.z - t_start.z * t_end.x
+
+    # iloczyn skalarny → jak bardzo tangenty są zgodne (1.0 = identyczne, -1.0 = przeciwne)
+    dot   = t_start.x * t_end.x + t_start.z * t_end.z
+
+    # kąt między tangentami w radianach
+    angle_rad = math.atan2(abs(cross), dot)
+    if tick % 50 == 0:
+        print('cross', cross)
+        print('dot', dot)
+        print('angle_rad ', angle_rad)
+
+    if angle_rad < 0.05:  # ~3°
+        return False, None, None
+
+    is_right = cross < 0
+
+    if angle_rad < 0.2:   # ~11°
+        severity = 1
+    elif angle_rad < 0.5: # ~29°
+        severity = 2
+    else:
+        severity = 3
+
+    return True, is_right, severity
 
 
 def compute_steering(
