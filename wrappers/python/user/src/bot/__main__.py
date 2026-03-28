@@ -7,6 +7,12 @@ from hackarena3 import BotContext, DriveGear, GearShift, RaceSnapshot, TireType,
 
 load_dotenv()
 
+speedTypes = {
+    "fastest": 150.0,
+    "fast": 80.0,
+    "normal": 35.0,
+    "slow": 10.0
+}
 
 def find_closest_centerline_point(
     position: Vec3,
@@ -59,33 +65,33 @@ def compute_steering(
 ) -> float:
     """Oblicz skręt kierownicy w kierunku punktu docelowego."""
     dx = target.position.x - position.x
-    dy = target.position.y - position.y
     dz = target.position.z - position.z
 
-    dot = dx * right.x + dy * right.y + dz * right.z
-    return max(-1.0, min(1.0, dot / 20.0))
+    length = math.hypot(dx, dz)
+    if length < 1e-6:
+        return 0.0
+
+    # kierunek do targetu w XZ
+    dir_x = dx / length
+    dir_z = dz / length
+
+    # projekcja na wektor "prawo"
+    steer = dir_x * right.x + dir_z * right.z
+
+    return max(-1.0, min(1.0, steer))
 
 
 def compute_throttle_brake(
-    speed_mps: float,
-    curvature: float,
-    grade_rad: float,
+    speed_kmh: float,
+    
 ) -> tuple[float, float]:
     """Dobierz gaz i hamulec na podstawie prędkości, krzywizny i nachylenia."""
-    abs_curvature = abs(curvature)
+    targetSpeed = 30.0
 
-    if abs_curvature < 0.001:
-        target_speed_mps = 80.0
+    if targetSpeed > speed_kmh:
+        return 0.3, 0.0
     else:
-        target_speed_mps = math.sqrt(30.0 / abs_curvature)
-        target_speed_mps = max(15.0, min(80.0, target_speed_mps))
-
-    speed_error = target_speed_mps - speed_mps + math.sin(grade_rad) * 10.0
-
-    if speed_error > 0:
-        return max(0.0, min(1.0, speed_error / 20.0)), 0.0
-    else:
-        return 0.0, min(1.0, (-speed_error) / 20.0)
+        return 0.01, 0.0
 
 
 def compute_gear_shift(gear: int, engine_rpm: float) -> GearShift:
@@ -106,6 +112,7 @@ class BasicBot:
 
     def __init__(self) -> None:
         self._tick = 0
+        self.prevIndex = 0
 
     def on_tick(self, snapshot: RaceSnapshot, ctx: BotContext) -> None:
         self._tick += 1
@@ -114,18 +121,10 @@ class BasicBot:
         if self._tick <= self.WARMUP_TICKS:
             return
 
-        if car.gear in (DriveGear.REVERSE, DriveGear.NEUTRAL):
-            ctx.set_controls(
-                throttle=0.0,
-                brake=0.3,
-                steer=0.0,
-                gear_shift=GearShift.UPSHIFT,
-            )
-            return
-
         centerline = ctx.track.centerline
+        centerlineLength = len(centerline)
         current_idx, current_point = find_closest_centerline_point(car.position, centerline)
-
+        
         steering = compute_steering(
             car.position,
             get_lookahead_point(centerline, current_idx, self.LOOKAHEAD_M),
@@ -133,7 +132,7 @@ class BasicBot:
         )
 
         throttle, brake = compute_throttle_brake(
-            car.speed_mps,
+            car.speed_kmh,
             get_lookahead_point(centerline, current_idx, self.BRAKE_LOOKAHEAD_M).curvature_1pm,
             current_point.grade_rad,
         )
@@ -157,6 +156,14 @@ class BasicBot:
         if min_wear < self.TIRE_WEAR_THRESHOLD and not car.pit_request_active:
             ctx.set_next_pit_tire_type(TireType.SOFT)
             ctx.request_emergency_pitstop()
+
+        if self._tick % 50 == 0:
+            print('speed: ')
+            print(throttle)
+            print('steer: ')
+            print(steering)
+            print('amount of points')
+            print(centerlineLength)
 
         ctx.set_controls(
             throttle=throttle,
