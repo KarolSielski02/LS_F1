@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from debug import init_debug_csv, write_debug_row
 import math
 
 from dotenv import load_dotenv
@@ -106,6 +106,7 @@ class BasicBot:
 
     def __init__(self) -> None:
         self._tick = 0
+        self._csv_writer, self._csv_file = init_debug_csv()
 
     def on_tick(self, snapshot: RaceSnapshot, ctx: BotContext) -> None:
         self._tick += 1
@@ -157,6 +158,22 @@ class BasicBot:
         if min_wear < self.TIRE_WEAR_THRESHOLD and not car.pit_request_active:
             ctx.set_next_pit_tire_type(TireType.SOFT)
             ctx.request_emergency_pitstop()
+
+        if snapshot.tick % 10 == 0:
+            write_debug_row(
+            writer=self._csv_writer,
+            snapshot=snapshot,
+            ctx=ctx,
+            current_idx=current_idx,
+            current_point=current_point,
+            lookahead_m=lookahead_m,
+            brake_lookahead_m=brake_lookahead_m,
+            steering=steering,
+            throttle=throttle,
+            brake=brake,
+            max_slip=max_slip,
+            min_wear=min_wear,
+        )
 
         ctx.set_controls(
             throttle=throttle,
