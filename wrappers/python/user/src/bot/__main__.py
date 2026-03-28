@@ -1,9 +1,13 @@
 from __future__ import annotations
 from debug import init_debug_csv, write_debug_row
-import math
 
 from dotenv import load_dotenv
-from hackarena3 import BotContext, DriveGear, GearShift, RaceSnapshot, TireType, run_bot, CenterlinePoint, Vec3
+from hackarena3 import BotContext, DriveGear, RaceSnapshot, TireType, run_bot, CenterlinePoint, Vec3
+from steering import find_closest_centerline_point, get_lookahead_point, classify_turn, compute_steering
+from gear import GearController
+from throttle import ThrottleController
+from track_guard import TrackGuard
+from detrack_recovery import DetrackRecovery
 
 load_dotenv()
 
@@ -14,172 +18,32 @@ speedTypes = {
     "slow": 10.0
 }
 
-def find_closest_centerline_point(
-    position: Vec3,
-    centerline: tuple[CenterlinePoint, ...],
-) -> tuple[int, CenterlinePoint]:
-    """Znajdź punkt na osi centralnej najbliższy aktualnej pozycji samochodu."""
-    best_idx = 0
-    best_dist = float("inf")
-
-    for i, point in enumerate(centerline):
-        dx = position.x - point.position.x
-        dy = position.y - point.position.y
-        dz = position.z - point.position.z
-        dist = math.sqrt(dx * dx + dy * dy + dz * dz)
-        if dist < best_dist:
-            best_dist = dist
-            best_idx = i
-
-    return best_idx, centerline[best_idx]
-
-
-def get_lookahead_point(
-    centerline: tuple[CenterlinePoint, ...],
-    current_idx: int,
-    lookahead_m: float,
-) -> CenterlinePoint:
-    """Zwróć punkt na torze oddalony o lookahead_m od aktualnej pozycji."""
-    current_s = centerline[current_idx].s_m
-    target_s = current_s + lookahead_m
-    lap_length = centerline[-1].s_m
-
-    if target_s > lap_length:
-        target_s -= lap_length
-
-    best = centerline[current_idx]
-    best_diff = float("inf")
-
-    for point in centerline:
-        diff = abs(point.s_m - target_s)
-        if diff < best_diff:
-            best_diff = diff
-            best = point
-
-    return best
-
-
-def classify_turn(
-    centerline: tuple[CenterlinePoint, ...],
-    current_idx: int,
-    lookahead_m: float,
-    tick: int,
-    sample_points: int = 5,
-) -> tuple[bool, bool | None, int | None]:
-    """Sprawdź czy za lookahead_m zaczyna się zakręt porównując tangenty kolejnych punktów.
-
-    Zwraca (is_turn, is_right, severity) gdzie:
-      is_turn    - czy w ogóle jest zakręt
-      is_right   - True = zakręt w prawo, False = w lewo, None = prosta
-      severity   - 1 łagodny, 2 średni, 3 ostry, None = prosta
-    """
-    target_s = centerline[current_idx].s_m + lookahead_m
-    lap_length = centerline[-1].s_m
-    if target_s > lap_length:
-        target_s -= lap_length
-
-    # znajdź indeks punktu startowego
-    start_idx = 0
-    best_diff = float("inf")
-    for i, point in enumerate(centerline):
-        diff = abs(point.s_m - target_s)
-        if diff < best_diff:
-            best_diff = diff
-            start_idx = i
-
-    # zbierz sample_points kolejnych punktów z zawijaniem
-    n = len(centerline)
-    indices = [(start_idx + i) % n for i in range(sample_points + 1)]
-    points = [centerline[i] for i in indices]
-
-    t_start = points[0].tangent
-    t_end = points[-1].tangent
-
-    # iloczyn wektorowy tangentów → jak bardzo i w którą stronę skręcił kierunek jazdy
-    # cross > 0 = skręt w lewo, cross < 0 = skręt w prawo
-    cross = t_start.x * t_end.z - t_start.z * t_end.x
-
-    # iloczyn skalarny → jak bardzo tangenty są zgodne (1.0 = identyczne, -1.0 = przeciwne)
-    dot   = t_start.x * t_end.x + t_start.z * t_end.z
-
-    # kąt między tangentami w radianach
-    angle_rad = math.atan2(abs(cross), dot)
-    if tick % 50 == 0:
-        print('cross', cross)
-        print('dot', dot)
-        print('angle_rad ', angle_rad)
-
-    if angle_rad < 0.05:  # ~3°
-        return False, None, None
-
-    is_right = cross < 0
-
-    if angle_rad < 0.2:   # ~11°
-        severity = 1
-    elif angle_rad < 0.5: # ~29°
-        severity = 2
-    else:
-        severity = 3
-
-    return True, is_right, severity
-
-
-def compute_steering(
-    position: Vec3,
-    target: CenterlinePoint,
-    right: Vec3,
-) -> float:
-    """Oblicz skręt kierownicy w kierunku punktu docelowego."""
-    dx = target.position.x - position.x
-    dz = target.position.z - position.z
-
-    length = math.hypot(dx, dz)
-    if length < 1e-6:
-        return 0.0
-
-    # kierunek do targetu w XZ
-    dir_x = dx / length
-    dir_z = dz / length
-
-    # projekcja na wektor "prawo"
-    steer = dir_x * right.x + dir_z * right.z
-
-    return max(-1.0, min(1.0, steer))
-
-
-def compute_throttle_brake(
-    speed_kmh: float,
-    
-) -> tuple[float, float]:
-    """Dobierz gaz i hamulec na podstawie prędkości, krzywizny i nachylenia."""
-    targetSpeed = 30.0
-
-    if targetSpeed > speed_kmh:
-        return 0.3, 0.0
-    else:
-        return 0.01, 0.0
-
-
-def compute_gear_shift(gear: int, engine_rpm: float) -> GearShift:
-    """Prosta automatyczna skrzynia biegów na podstawie RPM."""
-    if engine_rpm > 6500 and gear < 8:
-        return GearShift.UPSHIFT
-    if engine_rpm < 2500 and gear > 1:
-        return GearShift.DOWNSHIFT
-    return GearShift.NONE
 
 
 class BasicBot:
     WARMUP_TICKS = 50
     LOOKAHEAD_M = 15.0
-    BRAKE_LOOKAHEAD_M = 45.0
     TIRE_WEAR_THRESHOLD = 0.20
     SLIP_THRESHOLD = 1.0
+
+    # Brake lookahead scales with speed: ~1.8 s of travel → 100 m at 200 km/h
+    BRAKE_LOOKAHEAD_REACTION_S = 1.8
+    BRAKE_LOOKAHEAD_MIN_M = 40.0
+    BRAKE_LOOKAHEAD_MAX_M = 110.0
+
+    @staticmethod
+    def brake_lookahead_m(speed_kmh: float) -> float:
+        metres = (speed_kmh / 3.6) * BasicBot.BRAKE_LOOKAHEAD_REACTION_S
+        return max(BasicBot.BRAKE_LOOKAHEAD_MIN_M, min(BasicBot.BRAKE_LOOKAHEAD_MAX_M, metres))
 
     def __init__(self) -> None:
         self._tick = 0
         self._csv_writer, self._csv_file = init_debug_csv()
         self.prevIndex = 0
+        self._throttle_ctrl = ThrottleController()
+        self._gear_ctrl = GearController()
+        self._track_guard = TrackGuard()
+        self._detrack = DetrackRecovery()
 
     def on_tick(self, snapshot: RaceSnapshot, ctx: BotContext) -> None:
         self._tick += 1
@@ -193,16 +57,15 @@ class BasicBot:
         current_idx, current_point = find_closest_centerline_point(car.position, centerline)
         
         steering = compute_steering(
-            car.position,
-            get_lookahead_point(centerline, current_idx, self.LOOKAHEAD_M),
-            current_point.right,
+            car.orientation,
+            get_lookahead_point(centerline, current_idx, self.LOOKAHEAD_M).tangent,
+            self._tick
         )
 
-        throttle, brake = compute_throttle_brake(
-            car.speed_kmh,
-            get_lookahead_point(centerline, current_idx, self.BRAKE_LOOKAHEAD_M).curvature_1pm,
-            current_point.grade_rad,
+        is_turn, _, severity = classify_turn(
+            centerline, current_idx, self.brake_lookahead_m(car.speed_kmh), self._tick
         )
+        throttle, brake = self._throttle_ctrl.compute(car.speed_kmh, is_turn, severity)
 
         max_slip = max(
             car.tire_slip.front_left,
@@ -214,6 +77,14 @@ class BasicBot:
             throttle = 0.0
             brake = max(brake, 0.1)
 
+        track_status = self._track_guard.check(car.position, car.orientation, centerline, current_idx)
+        throttle, brake, steering = self._track_guard.apply_recovery(
+            track_status, throttle, brake, steering, centerline, current_idx, car.orientation
+        )
+        throttle, brake, steering, detrack_gs = self._detrack.apply(
+            track_status, ctx, throttle, brake, steering, self._tick, snapshot.server_time_ms
+        )
+
         min_wear = min(
             car.tire_wear.front_left,
             car.tire_wear.front_right,
@@ -224,35 +95,41 @@ class BasicBot:
             ctx.set_next_pit_tire_type(TireType.SOFT)
             ctx.request_emergency_pitstop()
 
-        if snapshot.tick % 10 == 0:
-            write_debug_row(
-                writer=self._csv_writer,
-                snapshot=snapshot,
-                ctx=ctx,
-                current_idx=current_idx,
-                current_point=current_point,
-                lookahead_m=lookahead_m,
-                brake_lookahead_m=brake_lookahead_m,
-                steering=steering,
-                throttle=throttle,
-                brake=brake,
-                max_slip=max_slip,
-                min_wear=min_wear,
-            )
+        # if snapshot.tick % 10 == 0:
+        #     write_debug_row(
+        #         writer=self._csv_writer,
+        #         snapshot=snapshot,
+        #         ctx=ctx,
+        #         current_idx=current_idx,
+        #         current_point=current_point,
+        #         lookahead_m=lookahead_m,
+        #         brake_lookahead_m=brake_lookahead_m,
+        #         steering=steering,
+        #         throttle=throttle,
+        #         brake=brake,
+        #         max_slip=max_slip,
+        #         min_wear=min_wear,
+        #     )
             
         if self._tick % 50 == 0:
-            print('speed: ')
-            print(throttle)
-            print('steer: ')
-            print(steering)
-            print('amount of points')
-            print(centerlineLength)
+            print('orientation: ', car.orientation)
+            print('get_lookahead_point.tangent: ',get_lookahead_point(centerline, current_idx, self.LOOKAHEAD_M).tangent),
+        #     print('speed: ')
+        #     print(throttle)
+        #     print('steer: ')
+        #     print(steering)
+        #     print('amount of points')
+        #     print(centerlineLength)
+
+        gear_shift = self._gear_ctrl.compute(int(car.gear), car.engine_rpm, car.speed_kmh)
+        if detrack_gs is not None:
+            gear_shift = detrack_gs
 
         ctx.set_controls(
             throttle=throttle,
             brake=brake,
             steer=steering,
-            gear_shift=compute_gear_shift(int(car.gear), car.engine_rpm),
+            gear_shift=gear_shift,
         )
 
 
