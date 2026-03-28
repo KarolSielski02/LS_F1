@@ -212,3 +212,5 @@ __marimo__/
 #Hackarena type shit
 hackarena
 hackarena.exe
+
+*.csv
