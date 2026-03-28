@@ -1,7 +1,9 @@
 from __future__ import annotations
+from dotenv import load_dotenv
 
 from hackarena3 import BotContext, DriveGear, GearShift, RaceSnapshot, run_bot
 
+load_dotenv()
 
 class ExampleBot:
     def __init__(self) -> None:
