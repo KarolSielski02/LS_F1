@@ -125,26 +125,26 @@ def classify_turn(
 
 
 def compute_steering(
-    position: Vec3,
-    target: CenterlinePoint,
-    right: Vec3,
+    orientation: Quaternion,
+    target_tangent: Vec3,
+    tick: int
 ) -> float:
-    """Oblicz skręt kierownicy w kierunku punktu docelowego."""
-    dx = target.position.x - position.x
-    dz = target.position.z - position.z
+    qx, qy, qz, qw = orientation.x, orientation.y, orientation.z, orientation.w
 
-    length = math.hypot(dx, dz)
-    if length < 1e-6:
-        return 0.0
+    # przód auta na osi Z — obracamy wektor (0, 0, 1) kwaternionem
+    forward_x = 2.0 * (qx * qz + qy * qw)
+    forward_z = 1.0 - 2.0 * (qx * qx + qy * qy)
 
-    # kierunek do targetu w XZ
-    dir_x = dx / length
-    dir_z = dz / length
+    cross = forward_x * target_tangent.z - forward_z * target_tangent.x
+    dot   = forward_x * target_tangent.x + forward_z * target_tangent.z
+    angle = math.atan2(cross, dot)
 
-    # projekcja na wektor "prawo"
-    steer = dir_x * right.x + dir_z * right.z
+    if tick % 50 == 0:
+        print(f"forward: x={forward_x:.3f} z={forward_z:.3f} | target: x={target_tangent.x:.3f} z={target_tangent.z:.3f}")
+        print(f"cross={cross:.3f} dot={dot:.3f} angle_deg={math.degrees(angle):.1f}")
 
-    return max(-1.0, min(1.0, steer))
+    steering = angle / (math.pi / 2)
+    return max(-1.0, min(1.0, steering))
 
 
 def compute_throttle_brake(
@@ -193,15 +193,15 @@ class BasicBot:
         current_idx, current_point = find_closest_centerline_point(car.position, centerline)
         
         steering = compute_steering(
-            car.position,
-            get_lookahead_point(centerline, current_idx, self.LOOKAHEAD_M),
-            current_point.right,
+            car.orientation,
+            get_lookahead_point(centerline, current_idx, self.LOOKAHEAD_M).tangent,
+            self._tick
         )
 
         throttle, brake = compute_throttle_brake(
             car.speed_kmh,
-            get_lookahead_point(centerline, current_idx, self.BRAKE_LOOKAHEAD_M).curvature_1pm,
-            current_point.grade_rad,
+            # get_lookahead_point(centerline, current_idx, self.BRAKE_LOOKAHEAD_M).curvature_1pm,
+            # current_point.grade_rad,
         )
 
         max_slip = max(
@@ -224,29 +224,31 @@ class BasicBot:
             ctx.set_next_pit_tire_type(TireType.SOFT)
             ctx.request_emergency_pitstop()
 
-        if snapshot.tick % 10 == 0:
-            write_debug_row(
-                writer=self._csv_writer,
-                snapshot=snapshot,
-                ctx=ctx,
-                current_idx=current_idx,
-                current_point=current_point,
-                lookahead_m=lookahead_m,
-                brake_lookahead_m=brake_lookahead_m,
-                steering=steering,
-                throttle=throttle,
-                brake=brake,
-                max_slip=max_slip,
-                min_wear=min_wear,
-            )
+        # if snapshot.tick % 10 == 0:
+        #     write_debug_row(
+        #         writer=self._csv_writer,
+        #         snapshot=snapshot,
+        #         ctx=ctx,
+        #         current_idx=current_idx,
+        #         current_point=current_point,
+        #         lookahead_m=lookahead_m,
+        #         brake_lookahead_m=brake_lookahead_m,
+        #         steering=steering,
+        #         throttle=throttle,
+        #         brake=brake,
+        #         max_slip=max_slip,
+        #         min_wear=min_wear,
+        #     )
             
         if self._tick % 50 == 0:
-            print('speed: ')
-            print(throttle)
-            print('steer: ')
-            print(steering)
-            print('amount of points')
-            print(centerlineLength)
+            print('orientation: ', car.orientation)
+            print('get_lookahead_point.tangent: ',get_lookahead_point(centerline, current_idx, self.LOOKAHEAD_M).tangent),
+        #     print('speed: ')
+        #     print(throttle)
+        #     print('steer: ')
+        #     print(steering)
+        #     print('amount of points')
+        #     print(centerlineLength)
 
         ctx.set_controls(
             throttle=throttle,
