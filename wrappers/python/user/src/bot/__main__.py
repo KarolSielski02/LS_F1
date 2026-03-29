@@ -4,10 +4,10 @@ from __future__ import annotations
 #from dotenv import load_dotenv
 from hackarena3 import BotContext, DriveGear, RaceSnapshot, TireType, run_bot, CenterlinePoint, Vec3
 from steering import find_closest_centerline_point, get_lookahead_point, classify_turn, compute_steering
-from src.bot.gear import GearController
-from src.bot.throttle import ThrottleController
-from src.bot.track_guard import TrackGuard
-from src.bot.detrack_recovery import DetrackRecovery
+from gear import GearController
+from throttle import ThrottleController
+from track_guard import TrackGuard
+from detrack_recovery import DetrackRecovery
 
 #load_dotenv()
 
@@ -20,7 +20,7 @@ speedTypes = {
 
 class BasicBot:
     WARMUP_TICKS = 50
-    LOOKAHEAD_M = 15.0
+    LOOKAHEAD_M = 10.0
     TIRE_WEAR_THRESHOLD = 0.20
     SLIP_THRESHOLD = 1.0
 
@@ -53,16 +53,17 @@ class BasicBot:
         centerline = ctx.track.centerline
         current_idx, current_point = find_closest_centerline_point(car.position, centerline)
         
+        currentLookahead = (car.speed_kmh/80.0)*self.LOOKAHEAD_M
         steering = compute_steering(
             car.orientation,
-            get_lookahead_point(centerline, current_idx, self.LOOKAHEAD_M).tangent,
+            get_lookahead_point(centerline, current_idx, currentLookahead).tangent,
             self._tick
         )
 
         is_turn, _, severity = classify_turn(
             centerline, current_idx, self.brake_lookahead_m(car.speed_kmh), self._tick
         )
-        throttle, brake, bBalance = self._throttle_ctrl.compute(car.speed_kmh, snapshot.car.tire_temperature_celsius, snapshot.car.tire_type, is_turn, severity)
+        throttle, brake, bBalance = self._throttle_ctrl.compute(car.speed_kmh, snapshot.car.tire_temperature_celsius, snapshot.car.tire_type, steering, self._tick, is_turn, severity)
 
         max_slip = max(
             car.tire_slip.front_left,
@@ -96,6 +97,11 @@ class BasicBot:
         gear_shift = self._gear_ctrl.compute(int(car.gear), car.engine_rpm, car.speed_kmh)
         if detrack_gs is not None:
             gear_shift = detrack_gs
+
+        if self._tick % 30 == 0:
+            print('brake'+str(brake))
+            print('severity '+str(severity))
+            print('lookahead '+str(currentLookahead))
 
         ctx.set_controls(
             throttle=throttle,

@@ -93,17 +93,19 @@ def classify_turn(
         print('dot', dot)
         print('angle_rad ', angle_rad)
 
-    if angle_rad < 0.14:  # ~6°
+    if angle_rad < 0.09:  # ~5°
         return False, None, None
 
     is_right = cross < 0
 
-    if angle_rad < 0.25:   # ~12°
+    if angle_rad < 0.13:   # ~12°
         severity = 1
-    elif angle_rad < 0.55: # ~28°
+    elif angle_rad < 0.25: # ~28°
         severity = 2
-    else:
+    elif angle_rad < 0.37:
         severity = 3
+    else:
+        severity = 4
 
     return True, is_right, severity
 
@@ -128,6 +130,12 @@ def compute_steering(
         print(f"cross={cross:.3f} dot={dot:.3f} angle_deg={math.degrees(angle):.1f}")
 
     steering = angle / (math.pi / 2)
+
+    if steering<-0.19:
+        steering -= 0.07
+    elif steering>0.19:
+        steering += 0.07
+
     return max(-1.0, min(1.0, steering))
 
 
