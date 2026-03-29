@@ -93,14 +93,14 @@ def classify_turn(
         print('dot', dot)
         print('angle_rad ', angle_rad)
 
-    if angle_rad < 0.05:  # ~3°
+    if angle_rad < 0.14:  # ~6°
         return False, None, None
 
     is_right = cross < 0
 
-    if angle_rad < 0.20:   # ~12°
+    if angle_rad < 0.25:   # ~12°
         severity = 1
-    elif angle_rad < 0.5: # ~28°
+    elif angle_rad < 0.55: # ~28°
         severity = 2
     else:
         severity = 3

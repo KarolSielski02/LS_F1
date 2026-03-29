@@ -3,7 +3,7 @@ from __future__ import annotations
 
 #from dotenv import load_dotenv
 from hackarena3 import BotContext, DriveGear, RaceSnapshot, TireType, run_bot, CenterlinePoint, Vec3
-from src.bot.steering import find_closest_centerline_point, get_lookahead_point, classify_turn, compute_steering
+from steering import find_closest_centerline_point, get_lookahead_point, classify_turn, compute_steering
 from src.bot.gear import GearController
 from src.bot.throttle import ThrottleController
 from src.bot.track_guard import TrackGuard
@@ -36,7 +36,7 @@ class BasicBot:
 
     def __init__(self) -> None:
         self._tick = 0
-        self._csv_writer, self._csv_file = init_debug_csv()
+        #self._csv_writer, self._csv_file = init_debug_csv()
         self.prevIndex = 0
         self._throttle_ctrl = ThrottleController()
         self._gear_ctrl = GearController()
@@ -62,7 +62,7 @@ class BasicBot:
         is_turn, _, severity = classify_turn(
             centerline, current_idx, self.brake_lookahead_m(car.speed_kmh), self._tick
         )
-        throttle, brake = self._throttle_ctrl.compute(car.speed_kmh, snapshot.car.tire_temperature_celsius, snapshot.car.tire_type, is_turn, severity)
+        throttle, brake, bBalance = self._throttle_ctrl.compute(car.speed_kmh, snapshot.car.tire_temperature_celsius, snapshot.car.tire_type, is_turn, severity)
 
         max_slip = max(
             car.tire_slip.front_left,
@@ -91,12 +91,6 @@ class BasicBot:
         if min_wear < self.TIRE_WEAR_THRESHOLD and not car.pit_request_active:
             ctx.set_next_pit_tire_type(TireType.SOFT)
             ctx.request_emergency_pitstop()
-            
-        if self._tick % 50 == 0:
-            print('orientation: ', car.orientation)
-            print('get_lookahead_point.tangent: ',get_lookahead_point(centerline, current_idx, self.LOOKAHEAD_M).tangent)
-            print('throttle '+str(throttle))
-            print('brake '+str(brake))
 
 
         gear_shift = self._gear_ctrl.compute(int(car.gear), car.engine_rpm, car.speed_kmh)
@@ -108,6 +102,7 @@ class BasicBot:
             brake=brake,
             steer=steering,
             gear_shift=gear_shift,
+            brake_balancer=bBalance
         )
 
 

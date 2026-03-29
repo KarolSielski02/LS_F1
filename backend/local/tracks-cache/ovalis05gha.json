@@ -1,0 +1,28 @@
+{
+  "id": "ovalis_05",
+  "name": "Ovalis",
+  "lapLengthMeters": 1910.52,
+  "followCameraAnchorPositions": [
+    { "x": -4.38, "y": 4.67, "z": -2.44 },
+    { "x": 191.53, "y": 1.79, "z": -2.25 },
+    { "x": 343.11, "y": 8.88, "z": -106.37 },
+    { "x": 421.25, "y": 24.37, "z": -322.56 },
+    { "x": 89.36, "y": 2.37, "z": -328.39 },
+    { "x": -93.94, "y": 6.95, "z": -327.53 },
+    { "x": -308.02, "y": 9.07, "z": -338.95 },
+    { "x": -392.38, "y": 14.67, "z": -13.63 },
+    { "x": -185.14, "y": 31.07, "z": 40.98 }
+  ],
+  "helicopterView": {
+    "ellipseCenterWorld": {
+      "x": 0,
+      "y": 70.0,
+      "z": -166
+    },
+    "ellipseSemiAxisXm": 360,
+    "ellipseSemiAxisZm": 160,
+    "ellipseRotationRad": 0.0,
+    "desiredArcOffsetTowardsM": 300.0,
+    "desiredArcOffsetAwayM": 150.0
+  }
+}

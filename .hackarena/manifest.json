@@ -13,10 +13,10 @@
   },
   "wrappers": {
     "python": {
-      "url": "https://api.github.com/repos/INIT-SGGW/HackArena3.0-ApiWrapper-Python/releases/assets/383407741?asset_name=wrapper-python-v0.1.0.zip",
+      "url": "https://api.github.com/repos/INIT-SGGW/HackArena3.0-ApiWrapper-Python/releases/assets/383802981?asset_name=wrapper-python-v0.1.2.zip",
       "install_dir": "wrappers\\python",
-      "sha256": "083996b65a0b58f8e694d92283ac69ad578ecbd680e56af48317d6b2c8ca00de",
-      "installed_at_unix": 1774690421,
+      "sha256": "375d4f8e154bb7812bcadc81ff1047df485dc0d715977e63222f2586e63a8015",
+      "installed_at_unix": 1774749062,
       "files": []
     }
   },
