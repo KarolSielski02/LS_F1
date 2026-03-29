@@ -3,6 +3,10 @@ import math
 
 from hackarena3 import CenterlinePoint, Vec3
 
+# minimalne angle_rad żeby uznać zakręt (brak zakrętu poniżej)
+_TURN_THRESHOLD_RAD = 0.05   # ~3°
+# angle_rad przy którym intensity = 1.0 (maksymalny zakręt)
+_TURN_MAX_RAD = 1.2          # ~69°
 
 def find_closest_centerline_point(
     position: Vec3,
@@ -55,13 +59,10 @@ def classify_turn(
     lookahead_m: float,
     tick: int,
     sample_points: int = 5,
-) -> tuple[bool, bool | None, int | None]:
-    """Sprawdź czy za lookahead_m zaczyna się zakręt porównując tangenty kolejnych punktów.
-
-    Zwraca (is_turn, is_right, severity) gdzie:
-      is_turn    - czy w ogóle jest zakręt
-      is_right   - True = zakręt w prawo, False = w lewo, None = prosta
-      severity   - 1 łagodny, 2 średni, 3 ostry, None = prosta
+) -> tuple[float, bool | None]:
+    """Zwraca (intensity, is_right) gdzie:
+      intensity  - 0.0 = prosta, 1.0 = maksymalny zakręt (ciągła)
+      is_right   - True = prawo, False = lewo, None = prosta
     """
     target_s = centerline[current_idx].s_m + lookahead_m
     lap_length = centerline[-1].s_m
@@ -81,31 +82,69 @@ def classify_turn(
     points = [centerline[i] for i in indices]
 
     t_start = points[0].tangent
-    t_end = points[-1].tangent
+    t_end   = points[-1].tangent
 
-    # cross > 0 = skręt w lewo, cross < 0 = skręt w prawo
-    cross = t_start.x * t_end.z - t_start.z * t_end.x
-    dot   = t_start.x * t_end.x + t_start.z * t_end.z
-
+    cross     = t_start.x * t_end.z - t_start.z * t_end.x
+    dot       = t_start.x * t_end.x + t_start.z * t_end.z
     angle_rad = math.atan2(abs(cross), dot)
+
     if tick % 50 == 0:
-        print('cross', cross)
-        print('dot', dot)
-        print('angle_rad ', angle_rad)
+        print(f"angle_rad={angle_rad:.4f} cross={cross:.4f} dot={dot:.4f}")
 
-    if angle_rad < 0.05:  # ~3°
-        return False, None, None
+    if angle_rad < _TURN_THRESHOLD_RAD:
+        return 0.0, None
 
-    is_right = cross < 0
+    intensity = min(1.0, (angle_rad - _TURN_THRESHOLD_RAD) / (_TURN_MAX_RAD - _TURN_THRESHOLD_RAD))
+    is_right  = cross < 0
 
-    if angle_rad < 0.20:   # ~12°
-        severity = 1
-    elif angle_rad < 0.5: # ~28°
-        severity = 2
-    else:
-        severity = 3
+    return intensity, is_right
 
-    return True, is_right, severity
+def scan_turn_intensity(
+    centerline: tuple[CenterlinePoint, ...],
+    current_idx: int,
+    scan_from_m: float,
+    scan_to_m: float,
+    sample_points: int = 5,
+) -> tuple[float, bool | None]:  # <- tuple, nie float
+    n = len(centerline)
+    lap_length = centerline[-1].s_m
+    current_s = centerline[current_idx].s_m
+
+    from_s = current_s + scan_from_m
+    to_s   = current_s + scan_to_m
+
+    if from_s > lap_length:
+        from_s -= lap_length
+        to_s   -= lap_length
+
+    max_intensity = 0.0
+    dominant_cross = 0.0
+
+    for i in range(n):
+        s = centerline[i].s_m
+        if not (from_s <= s <= to_s):
+            continue
+
+        end_idx = (i + sample_points) % n
+        t_start = centerline[i].tangent
+        t_end   = centerline[end_idx].tangent
+
+        cross     = t_start.x * t_end.z - t_start.z * t_end.x
+        dot       = t_start.x * t_end.x + t_start.z * t_end.z
+        angle_rad = math.atan2(abs(cross), dot)
+
+        if angle_rad < 0.05:
+            continue
+
+        intensity = min(1.0, (angle_rad - 0.05) / (1.2 - 0.05))
+
+        if intensity > max_intensity:
+            max_intensity = intensity
+            dominant_cross = cross
+
+    is_right = (dominant_cross < 0) if max_intensity > 0.0 else None
+
+    return max_intensity, is_right  # <- zwróć tuple
 
 
 def compute_steering(

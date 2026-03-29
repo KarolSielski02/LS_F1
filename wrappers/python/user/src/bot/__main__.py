@@ -3,7 +3,7 @@ from debug import init_debug_csv, write_debug_row
 
 from dotenv import load_dotenv
 from hackarena3 import BotContext, DriveGear, RaceSnapshot, TireType, run_bot, CenterlinePoint, Vec3
-from steering import find_closest_centerline_point, get_lookahead_point, classify_turn, compute_steering
+from steering import find_closest_centerline_point, get_lookahead_point, scan_turn_intensity, compute_steering
 from gear import GearController
 from throttle import ThrottleController
 from track_guard import TrackGuard
@@ -28,7 +28,7 @@ class BasicBot:
     # Brake lookahead scales with speed: ~1.8 s of travel → 100 m at 200 km/h
     BRAKE_LOOKAHEAD_REACTION_S = 1.8
     BRAKE_LOOKAHEAD_MIN_M = 40.0
-    BRAKE_LOOKAHEAD_MAX_M = 110.0
+    BRAKE_LOOKAHEAD_MAX_M = 220.0
 
     @staticmethod
     def brake_lookahead_m(speed_kmh: float) -> float:
@@ -43,8 +43,7 @@ class BasicBot:
         self._gear_ctrl = GearController()
         self._track_guard = TrackGuard()
         self._detrack = DetrackRecovery()
-        self._prev_is_turn = False
-        self._prev_severity: int | None = None
+        self._prev_intensity: float = 0.0
 
     def on_tick(self, snapshot: RaceSnapshot, ctx: BotContext) -> None:
         self._tick += 1
@@ -62,21 +61,41 @@ class BasicBot:
             self._tick
         )
 
-        is_turn, _, severity = classify_turn(
-            centerline, current_idx, self.brake_lookahead_m(car.speed_kmh), self._tick
+        lookahead = self.brake_lookahead_m(car.speed_kmh) 
+
+        intensity, _ = scan_turn_intensity(
+            centerline, current_idx,
+            scan_from_m=0.0,
+            scan_to_m=lookahead,
         )
-        throttle, brake = self._throttle_ctrl.compute(car.speed_kmh, snapshot.car.tire_temperature_celsius, snapshot.car.tire_type, is_turn, severity)
+        future_intensity, _ = scan_turn_intensity(
+            centerline, current_idx,
+            scan_from_m=lookahead,
+            scan_to_m=lookahead * 2.0,
+        )
+
+        min_tire_temp = min(
+            car.tire_temperature_celsius.front_left_celsius,
+            car.tire_temperature_celsius.front_right_celsius,
+            car.tire_temperature_celsius.rear_left_celsius,
+            car.tire_temperature_celsius.rear_right_celsius,
+        )
+
+        throttle, brake = self._throttle_ctrl.compute(
+            car.speed_kmh,
+            intensity,
+            future_intensity,
+            min_tire_temp=min_tire_temp,
+            tire_type_name=car.tire_type.name,
+        )
 
         differential_lock = compute_differential_lock(
-            is_turn=is_turn,
-            severity=severity,
-            prev_is_turn=self._prev_is_turn,
-            prev_severity=self._prev_severity,
+            intensity=intensity,
+            prev_intensity=self._prev_intensity,
             throttle=throttle,
         )
 
-        self._prev_is_turn = is_turn
-        self._prev_severity = severity
+        self._prev_intensity = intensity
 
         max_slip = max(
             car.tire_slip.front_left,

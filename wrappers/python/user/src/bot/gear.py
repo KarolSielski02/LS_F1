@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from hackarena3 import GearShift
 
-_UPSHIFT_RPM   = 5500
+_UPSHIFT_RPM   = 8500
 _DOWNSHIFT_RPM = 2000
 
 # Minimalna prędkość (km/h) utrzymania biegu — poniżej redukcja
