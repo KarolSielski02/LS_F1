@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from hackarena3 import BotContext, GearShift
 
-from src.bot.track_guard import TrackStatus
+from track_guard import TrackStatus
 
 # Poślizg / poza tor / zła strona — czekaj tyle zanim wywołasz back_to_track (czas na naturalny powrót)
 _DELAY_BEFORE_TELEPORT_MS = 8000

@@ -4,10 +4,11 @@ from __future__ import annotations
 #from dotenv import load_dotenv
 from hackarena3 import BotContext, DriveGear, RaceSnapshot, TireType, run_bot, CenterlinePoint, Vec3
 from steering import find_closest_centerline_point, get_lookahead_point, classify_turn, compute_steering
-from src.bot.gear import GearController
-from src.bot.throttle import ThrottleController
-from src.bot.track_guard import TrackGuard
-from src.bot.detrack_recovery import DetrackRecovery
+from gear import GearController
+from throttle import ThrottleController
+from track_guard import TrackGuard
+from detrack_recovery import DetrackRecovery
+from differential import compute_differential_lock
 
 #load_dotenv()
 
@@ -42,6 +43,8 @@ class BasicBot:
         self._gear_ctrl = GearController()
         self._track_guard = TrackGuard()
         self._detrack = DetrackRecovery()
+        self._prev_severity: float = 0.0
+
 
     def on_tick(self, snapshot: RaceSnapshot, ctx: BotContext) -> None:
         self._tick += 1
@@ -97,12 +100,20 @@ class BasicBot:
         if detrack_gs is not None:
             gear_shift = detrack_gs
 
+        differential_lock = compute_differential_lock(
+            severity=severity,
+            prev_severity=self._prev_severity,
+            throttle=throttle,
+        )
+        self._prev_severity = severity
+
         ctx.set_controls(
             throttle=throttle,
             brake=brake,
             steer=steering,
             gear_shift=gear_shift,
-            brake_balancer=bBalance
+            brake_balancer=bBalance,
+            differential_lock = differential_lock
         )
 
 
