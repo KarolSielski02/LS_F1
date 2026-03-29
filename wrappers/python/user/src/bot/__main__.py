@@ -8,6 +8,7 @@ from gear import GearController
 from throttle import ThrottleController
 from track_guard import TrackGuard
 from detrack_recovery import DetrackRecovery
+from differential import compute_differential_lock
 
 load_dotenv()
 
@@ -42,6 +43,8 @@ class BasicBot:
         self._gear_ctrl = GearController()
         self._track_guard = TrackGuard()
         self._detrack = DetrackRecovery()
+        self._prev_is_turn = False
+        self._prev_severity: int | None = None
 
     def on_tick(self, snapshot: RaceSnapshot, ctx: BotContext) -> None:
         self._tick += 1
@@ -63,6 +66,17 @@ class BasicBot:
             centerline, current_idx, self.brake_lookahead_m(car.speed_kmh), self._tick
         )
         throttle, brake = self._throttle_ctrl.compute(car.speed_kmh, snapshot.car.tire_temperature_celsius, snapshot.car.tire_type, is_turn, severity)
+
+        differential_lock = compute_differential_lock(
+            is_turn=is_turn,
+            severity=severity,
+            prev_is_turn=self._prev_is_turn,
+            prev_severity=self._prev_severity,
+            throttle=throttle,
+        )
+
+        self._prev_is_turn = is_turn
+        self._prev_severity = severity
 
         max_slip = max(
             car.tire_slip.front_left,
@@ -108,6 +122,7 @@ class BasicBot:
             brake=brake,
             steer=steering,
             gear_shift=gear_shift,
+            differential_lock=differential_lock,
         )
 
 
