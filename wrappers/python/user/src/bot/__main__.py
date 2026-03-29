@@ -1,15 +1,15 @@
 from __future__ import annotations
-from debug import init_debug_csv, write_debug_row
+#from debug import init_debug_csv, write_debug_row
 
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 from hackarena3 import BotContext, DriveGear, RaceSnapshot, TireType, run_bot, CenterlinePoint, Vec3
-from steering import find_closest_centerline_point, get_lookahead_point, classify_turn, compute_steering
-from gear import GearController
-from throttle import ThrottleController
-from track_guard import TrackGuard
-from detrack_recovery import DetrackRecovery
+from src.bot.steering import find_closest_centerline_point, get_lookahead_point, classify_turn, compute_steering
+from src.bot.gear import GearController
+from src.bot.throttle import ThrottleController
+from src.bot.track_guard import TrackGuard
+from src.bot.detrack_recovery import DetrackRecovery
 
-load_dotenv()
+#load_dotenv()
 
 speedTypes = {
     "fastest": 150.0,
