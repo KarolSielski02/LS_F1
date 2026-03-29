@@ -21,14 +21,14 @@ speedTypes = {
 
 class BasicBot:
     WARMUP_TICKS = 50
-    LOOKAHEAD_M = 15.0
+    LOOKAHEAD_M = 25.0
     TIRE_WEAR_THRESHOLD = 0.20
     SLIP_THRESHOLD = 1.0
 
     # Brake lookahead scales with speed: ~1.8 s of travel → 100 m at 200 km/h
     BRAKE_LOOKAHEAD_REACTION_S = 1.8
     BRAKE_LOOKAHEAD_MIN_M = 40.0
-    BRAKE_LOOKAHEAD_MAX_M = 220.0
+    BRAKE_LOOKAHEAD_MAX_M = 300.0
 
     @staticmethod
     def brake_lookahead_m(speed_kmh: float) -> float:
@@ -71,7 +71,7 @@ class BasicBot:
         future_intensity, _ = scan_turn_intensity(
             centerline, current_idx,
             scan_from_m=lookahead,
-            scan_to_m=lookahead * 2.0,
+            scan_to_m=lookahead * 2,
         )
 
         min_tire_temp = min(
@@ -122,14 +122,14 @@ class BasicBot:
             car.tire_wear.rear_right,
         )
         if min_wear < self.TIRE_WEAR_THRESHOLD and not car.pit_request_active:
-            ctx.set_next_pit_tire_type(TireType.SOFT)
+            ctx.set_next_pit_tire_type(TireType.HARD)
             ctx.request_emergency_pitstop()
             
-        if self._tick % 50 == 0:
-            print('orientation: ', car.orientation)
-            print('get_lookahead_point.tangent: ',get_lookahead_point(centerline, current_idx, self.LOOKAHEAD_M).tangent)
-            print('throttle '+str(throttle))
-            print('brake '+str(brake))
+        # if self._tick % 50 == 0:
+        #     print('orientation: ', car.orientation)
+        #     print('get_lookahead_point.tangent: ',get_lookahead_point(centerline, current_idx, self.LOOKAHEAD_M).tangent)
+        #     print('throttle '+str(throttle))
+        #     print('brake '+str(brake))
 
 
         gear_shift = self._gear_ctrl.compute(int(car.gear), car.engine_rpm, car.speed_kmh)

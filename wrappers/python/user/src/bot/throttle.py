@@ -61,7 +61,7 @@ class ThrottleController:
         self._speed_min = speed_min_kmh
 
     def _throttle_step(self, intensity: float) -> float:
-        return 0.08 - intensity * 0.06
+        return 0.04 - intensity * 0.03
 
     def _ramp_throttle(self, target: float, intensity: float) -> float:
         self._throttle_tick += 1
@@ -133,7 +133,8 @@ class ThrottleController:
         if speed_kmh <= target_speed:
             self._brake_ticks = 0
             self._last_brake = 0.0
-            throttle = self._ramp_throttle(coast_throttle, intensity)
+            exit_throttle = coast_throttle * (1.0 - intensity * 0.3)  # dodaj
+            throttle = self._ramp_throttle(exit_throttle, intensity)  # było coast_throttle
             self._last_throttle = throttle
             return throttle, 0.0
 

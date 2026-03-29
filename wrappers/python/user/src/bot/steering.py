@@ -52,53 +52,6 @@ def get_lookahead_point(
 
     return best
 
-
-def classify_turn(
-    centerline: tuple[CenterlinePoint, ...],
-    current_idx: int,
-    lookahead_m: float,
-    tick: int,
-    sample_points: int = 5,
-) -> tuple[float, bool | None]:
-    """Zwraca (intensity, is_right) gdzie:
-      intensity  - 0.0 = prosta, 1.0 = maksymalny zakręt (ciągła)
-      is_right   - True = prawo, False = lewo, None = prosta
-    """
-    target_s = centerline[current_idx].s_m + lookahead_m
-    lap_length = centerline[-1].s_m
-    if target_s > lap_length:
-        target_s -= lap_length
-
-    start_idx = 0
-    best_diff = float("inf")
-    for i, point in enumerate(centerline):
-        diff = abs(point.s_m - target_s)
-        if diff < best_diff:
-            best_diff = diff
-            start_idx = i
-
-    n = len(centerline)
-    indices = [(start_idx + i) % n for i in range(sample_points + 1)]
-    points = [centerline[i] for i in indices]
-
-    t_start = points[0].tangent
-    t_end   = points[-1].tangent
-
-    cross     = t_start.x * t_end.z - t_start.z * t_end.x
-    dot       = t_start.x * t_end.x + t_start.z * t_end.z
-    angle_rad = math.atan2(abs(cross), dot)
-
-    if tick % 50 == 0:
-        print(f"angle_rad={angle_rad:.4f} cross={cross:.4f} dot={dot:.4f}")
-
-    if angle_rad < _TURN_THRESHOLD_RAD:
-        return 0.0, None
-
-    intensity = min(1.0, (angle_rad - _TURN_THRESHOLD_RAD) / (_TURN_MAX_RAD - _TURN_THRESHOLD_RAD))
-    is_right  = cross < 0
-
-    return intensity, is_right
-
 def scan_turn_intensity(
     centerline: tuple[CenterlinePoint, ...],
     current_idx: int,
