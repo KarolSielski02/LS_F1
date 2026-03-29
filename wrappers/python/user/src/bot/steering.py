@@ -98,9 +98,9 @@ def classify_turn(
 
     is_right = cross < 0
 
-    if angle_rad < 0.2:   # ~11°
+    if angle_rad < 0.20:   # ~12°
         severity = 1
-    elif angle_rad < 0.5: # ~29°
+    elif angle_rad < 0.5: # ~28°
         severity = 2
     else:
         severity = 3
